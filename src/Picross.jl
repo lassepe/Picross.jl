@@ -4,8 +4,8 @@ using GLMakie: GLMakie
 using Makie: Makie
 
 struct Problem
-    row_blocks::Vector{Int}
-    column_blocks::Vector{Int}
+    row_blocks::Vector{Vector{Int}}
+    column_blocks::Vector{Vector{Int}}
 end
 
 struct ProblemState
@@ -32,7 +32,7 @@ function get_blocks_from_line(line::AbstractVector{Bool})
     blocks
 end
 
-function get_blocks_from_grid(grid::Matrix{Bool})
+function get_blocks_from_grid(grid::AbstractMatrix{Bool})
     row_blocks = map(get_blocks_from_line, eachrow(grid))
     column_blocks = map(get_blocks_from_line, eachcol(grid))
 
@@ -60,11 +60,11 @@ function show_gui(problem::Problem, problem_state::ProblemState)
 end
 
 function main()
-    problem = Problem([3, 3, 3], [3, 3, 3])
+    problem = Problem([[3], [3], [3]], [[3], [3], [3]])
     problem_state = ProblemState([
         1 1 1
         0 1 1
-        0 0 1
+        1 0 1
     ])
     display(show_gui(problem, problem_state))
 
