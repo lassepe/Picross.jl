@@ -1,0 +1,8 @@
+name = "Picross"
+uuid = "c5c8564c-32ba-4b5a-98ec-591a0df30ca5"
+authors = ["lassepe <lasse.peters@mailbox.org>"]
+version = "0.1.0"
+
+[deps]
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
