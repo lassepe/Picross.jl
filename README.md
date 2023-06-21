@@ -1,6 +1,6 @@
 # Picross.jl
 
-A quick and dirty Julia implementatio a picross solver.
+A quick and dirty Julia implementation of a picross solver.
 
 ## Insall
 
