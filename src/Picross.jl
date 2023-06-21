@@ -112,7 +112,6 @@ function solve(problem::Problem)
         problem.column_blocks,
     )
     # 3. iterate over rows and columns and push conclusions to internal state
-    is_solved = false
     iteration = 0
     while any(∉([0, 1]), solver_state)
         # rows...
