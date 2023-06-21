@@ -5,6 +5,7 @@ using Makie: Makie
 using Combinatorics: Combinatorics
 using ImageInTerminal: ImageInTerminal
 using Images: Gray, colorview
+using SparseArrays: spzeros
 
 Base.@kwdef struct Problem
     row_blocks::Vector{Vector{Int}}
@@ -57,30 +58,34 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
     )
     # go over all possibilities of distributing the excess free space between the blocks
     # Note: +2 for virtual gaps in each end
-    free_space_partitions = collect(Combinatorics.partitions(free_space + 2, length(blocks) + 1))
-    gap_size_possibilities = unique(
-        reduce(vcat, [collect(Combinatorics.permutations(p)) for p in free_space_partitions]),
-    )
-
-    # at the extremes we can also have gaps of size zero (which we have accounted for through the offset of +2 above)
-    for p in gap_size_possibilities
-        p[begin] -= 1
-        p[end] -= 1
+    free_space_partitions = Combinatorics.partitions(free_space + 2, length(blocks) + 1)
+    gap_size_possibilities = Set{Vector{Int}}()
+    for p in free_space_partitions
+        for c in Combinatorics.permutations(p)
+            # at the extremes we can also have gaps of size zero (which we have accounted for through the offset of +2 above)
+            c[begin] -= 1
+            c[end] -= 1
+            push!(gap_size_possibilities, c)
+        end
     end
 
-    map(gap_size_possibilities) do gap_size_possibility
-        line = zeros(Bool, line_length)
+    line_options = Set{Vector{Bool}}()
+
+    for gap_size_possibility in gap_size_possibilities
+        line = spzeros(Bool, line_length)
         current_position = 1
         for (block, gap) in zip(blocks, gap_size_possibility)
             current_position += gap
             line[current_position:(current_position + block - 1)] .= true
             current_position += block
         end
-        line
+        push!(line_options, line)
     end
+
+    line_options
 end
 
-function prune_options(options::Vector{Vector{Bool}}, current_state::Vector{Int})
+function prune_options(options::Set{Vector{Bool}}, current_state::Vector{Int})
     filter(options) do option
         all(zip(option, current_state)) do (option, state)
             state == -1 || option == state
@@ -88,7 +93,7 @@ function prune_options(options::Vector{Vector{Bool}}, current_state::Vector{Int}
     end
 end
 
-function intersect_line_options(options::Vector{Vector{Bool}})
+function intersect_line_options(options::Set{Vector{Bool}})
     fills = reduce(.&, options)
     crosses = reduce(.&, (map(!, o) for o in options))
     (; fills, crosses)
@@ -99,10 +104,12 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
     # 1. generate the internal solver state
     solver_state = fill(-1, length(problem.row_blocks), length(problem.column_blocks))
     # 2. derive the initial options for each row and column
+    verbose && @info "Generating initial row options"
     row_options = map(
         blocks -> get_possible_lines_from_blocks(blocks, length(problem.column_blocks)),
         problem.row_blocks,
     )
+    verbose && @info "Generating initial column options"
     column_options = map(
         blocks -> get_possible_lines_from_blocks(blocks, length(problem.row_blocks)),
         problem.column_blocks,
