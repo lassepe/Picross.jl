@@ -4,7 +4,7 @@ using GLMakie: GLMakie
 using Makie: Makie
 using Combinatorics: Combinatorics
 
-struct Problem
+Base.@kwdef struct Problem
     row_blocks::Vector{Vector{Int}}
     column_blocks::Vector{Vector{Int}}
 end
@@ -138,7 +138,6 @@ function solve(problem::Problem)
             solver_state[crosses, jj] .= 0
         end
         iteration += 1
-        @show iteration
         if iteration > 1000
             @info "Too many iterations. Giving up"
             return false
@@ -170,7 +169,32 @@ function show_gui(problem::Problem, problem_state::ProblemState)
 end
 
 function main()
-    problem = Problem([[1, 1], [2], [1]], [[3], [1], [1]])
+    problem = Problem(;
+        row_blocks = [
+            [4],
+            [1, 4],
+            [1, 2],
+            [1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 2],
+            [1, 1, 2],
+            [1, 4],
+            [1, 1, 2, 1],
+            [1, 1, 2, 1],
+        ],
+        column_blocks = [
+            [8],
+            [1],
+            [1, 1, 2],
+            [1, 1],
+            [1, 7],
+            [1, 3],
+            [1, 2],
+            [1, 1],
+            [2, 1],
+            [5, 2],
+        ],
+    )
     final_problem_state = solve(problem)
     display(show_gui(problem, final_problem_state))
 end
