@@ -3,6 +3,8 @@ module Picross
 using GLMakie: GLMakie
 using Makie: Makie
 using Combinatorics: Combinatorics
+using ImageInTerminal: ImageInTerminal
+using Images: Gray, colorview
 
 Base.@kwdef struct Problem
     row_blocks::Vector{Vector{Int}}
@@ -13,12 +15,12 @@ struct ProblemState
     grid::Matrix{Bool}
 end
 
-function get_blocks_from_line(line::AbstractVector{Bool})
+function get_blocks_from_line(line::AbstractVector)
     blocks = Int[]
     last_block_position = -2
 
     for position in eachindex(line)
-        block_is_colored = line[position]
+        block_is_colored = line[position] > 0
         if block_is_colored
             position_is_next_to_last_block = position == last_block_position + 1
             if position_is_next_to_last_block
@@ -33,16 +35,10 @@ function get_blocks_from_line(line::AbstractVector{Bool})
     blocks
 end
 
-function get_blocks_from_grid(grid::AbstractMatrix{Bool})
-    row_blocks = map(get_blocks_from_line, eachrow(grid))
-    column_blocks = map(get_blocks_from_line, eachcol(grid))
-
-    (; row_blocks, column_blocks)
-end
-
-# TODO
-function is_valid(problem, problem_state)
-    current_blocks = get_blocks_from_grid(problem_state.grid)
+function get_problem_description_from_image(image::AbstractMatrix)
+    row_blocks = map(get_blocks_from_line, eachrow(image))
+    column_blocks = map(get_blocks_from_line, eachcol(image))
+    Problem(; row_blocks, column_blocks)
 end
 
 """
@@ -99,7 +95,7 @@ function intersect_line_options(options::Vector{Vector{Bool}})
 end
 
 # TODO: continue here -- get those fields for which we have a unique intersection
-function solve(problem::Problem)
+function solve(problem::Problem; verbose = false, maximum_number_of_iterations = 1000)
     # 1. generate the internal solver state
     solver_state = fill(-1, length(problem.row_blocks), length(problem.column_blocks))
     # 2. derive the initial options for each row and column
@@ -137,13 +133,15 @@ function solve(problem::Problem)
             solver_state[crosses, jj] .= 0
         end
         iteration += 1
-        if iteration > 1000
+        if iteration > maximum_number_of_iterations
             @info "Too many iterations. Giving up"
             return false
         end
+        if verbose
+            @info "Iteration $(iteration)"
+            colorview(Gray, Matrix{Float64}(solver_state)) |> display
+        end
     end
-    # 4. maybe trigger new updates based on adjecent rows and columns
-    # 5. claim convergence or "not solvable"
     ProblemState(Matrix{Bool}(solver_state))
 end
 
