@@ -62,8 +62,9 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
     # go over all possibilities of distributing the excess free space between the blocks
     # Note: +2 for virtual gaps in each end
     free_space_partitions = collect(Combinatorics.partitions(free_space + 2, length(blocks) + 1))
-    gap_size_possibilities =
-        unique(reduce(vcat, [Combinatorics.permutations(p) for p in free_space_partitions]))
+    gap_size_possibilities = unique(
+        reduce(vcat, [collect(Combinatorics.permutations(p)) for p in free_space_partitions]),
+    )
 
     # at the extremes we can also have gaps of size zero (which we have accounted for through the offset of +2 above)
     for p in gap_size_possibilities
@@ -71,7 +72,6 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
         p[end] -= 1
     end
 
-    # TODO: continue here -- generate all boolean lines
     map(gap_size_possibilities) do gap_size_possibility
         line = zeros(Bool, line_length)
         current_position = 1
@@ -82,6 +82,71 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
         end
         line
     end
+end
+
+function prune_options(options::Vector{Vector{Bool}}, current_state::Vector{Int})
+    filter(options) do option
+        all(zip(option, current_state)) do (option, state)
+            state == -1 || option == state
+        end
+    end
+end
+
+function intersect_line_options(options::Vector{Vector{Bool}})
+    fills = reduce(.&, options)
+    crosses = reduce(.&, (map(!, o) for o in options))
+    (; fills, crosses)
+end
+
+# TODO: continue here -- get those fields for which we have a unique intersection
+function solve(problem::Problem)
+    # 1. generate the internal solver state
+    solver_state = fill(-1, length(problem.row_blocks), length(problem.column_blocks))
+    # 2. derive the initial options for each row and column
+    row_options = map(
+        blocks -> get_possible_lines_from_blocks(blocks, length(problem.column_blocks)),
+        problem.row_blocks,
+    )
+    column_options = map(
+        blocks -> get_possible_lines_from_blocks(blocks, length(problem.row_blocks)),
+        problem.column_blocks,
+    )
+    # 3. iterate over rows and columns and push conclusions to internal state
+    is_solved = false
+    iteration = 0
+    while any(∉([0, 1]), solver_state)
+        # rows...
+        for (ii, row_options_ii) in enumerate(row_options)
+            pruned_row_options = prune_options(row_options_ii, solver_state[ii, :])
+            if isempty(pruned_row_options)
+                @info "Pruned options are empty. Problem not solvable"
+                return false
+            end
+            fills, crosses = intersect_line_options(pruned_row_options)
+            solver_state[ii, fills] .= 1
+            solver_state[ii, crosses] .= 0
+        end
+        # columns...
+        for (jj, column_options_jj) in enumerate(column_options)
+            pruned_column_options = prune_options(column_options_jj, solver_state[:, jj])
+            if isempty(pruned_column_options)
+                @info "Pruned options are empty. Problem not solvable"
+                return false
+            end
+            fills, crosses = intersect_line_options(pruned_column_options)
+            solver_state[fills, jj] .= 1
+            solver_state[crosses, jj] .= 0
+        end
+        iteration += 1
+        @show iteration
+        if iteration > 1000
+            @info "Too many iterations. Giving up"
+            return false
+        end
+    end
+    # 4. maybe trigger new updates based on adjecent rows and columns
+    # 5. claim convergence or "not solvable"
+    ProblemState(Matrix{Bool}(solver_state))
 end
 
 function show_gui(problem::Problem, problem_state::ProblemState)
@@ -105,15 +170,9 @@ function show_gui(problem::Problem, problem_state::ProblemState)
 end
 
 function main()
-    problem = Problem([[3], [3], [3]], [[3], [3], [3]])
-    problem_state = ProblemState([
-        1 0 1
-        0 1 1
-        1 0 1
-    ])
-    display(show_gui(problem, problem_state))
-
-    get_blocks_from_grid(problem_state.grid)
+    problem = Problem([[1, 1], [2], [1]], [[3], [1], [1]])
+    final_problem_state = solve(problem)
+    display(show_gui(problem, final_problem_state))
 end
 
 end # module Picross
