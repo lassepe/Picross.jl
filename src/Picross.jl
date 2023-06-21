@@ -9,7 +9,34 @@ struct Problem
 end
 
 struct ProblemState
-    grid::Matrix{Int}
+    grid::Matrix{Bool}
+end
+
+function get_blocks_from_line(line::AbstractVector{Bool})
+    blocks = Int[]
+    last_block_position = -2
+
+    for position in eachindex(line)
+        block_is_colored = line[position]
+        if block_is_colored
+            position_is_next_to_last_block = position == last_block_position + 1
+            if position_is_next_to_last_block
+                blocks[end] += 1
+            else
+                push!(blocks, 1)
+            end
+            last_block_position = position
+        end
+    end
+
+    blocks
+end
+
+function get_blocks_from_grid(grid::Matrix{Bool})
+    row_blocks = map(get_blocks_from_line, eachrow(grid))
+    column_blocks = map(get_blocks_from_line, eachcol(grid))
+
+    (; row_blocks, column_blocks)
 end
 
 function show_gui(problem::Problem, problem_state::ProblemState)
@@ -35,11 +62,13 @@ end
 function main()
     problem = Problem([3, 3, 3], [3, 3, 3])
     problem_state = ProblemState([
-        1 0 1
-        0 0 1
+        1 1 1
+        0 1 1
         0 0 1
     ])
-    show_gui(problem, problem_state)
+    display(show_gui(problem, problem_state))
+
+    get_blocks_from_grid(problem_state.grid)
 end
 
 end # module Picross
