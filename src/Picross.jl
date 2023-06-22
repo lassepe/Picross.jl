@@ -120,8 +120,8 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
         ),
     )
 
-    open_rows = Set(deepcopy(keys(row_options)))
-    open_columns = Set(deepcopy(keys(column_options)))
+    open_rows = Set(keys(row_options))
+    open_columns = Set(keys(column_options))
 
     # 3. iterate over rows and columns and push conclusions to internal state
     iteration = 0
