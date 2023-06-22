@@ -1,10 +1,8 @@
 module Picross
 
-using GLMakie: GLMakie
-using Makie: Makie
 using Combinatorics: Combinatorics
 using ImageInTerminal: ImageInTerminal
-using Images: Gray, colorview
+using Images: Gray, colorview, load, imresize
 using SparseArrays: spzeros
 
 Base.@kwdef struct Problem
@@ -36,7 +34,7 @@ function get_blocks_from_line(line::AbstractVector)
     blocks
 end
 
-function get_problem_description_from_image(image::AbstractMatrix)
+function get_problem_from_image(image::AbstractMatrix)
     row_blocks = map(get_blocks_from_line, eachrow(image))
     column_blocks = map(get_blocks_from_line, eachcol(image))
     Problem(; row_blocks, column_blocks)
@@ -85,8 +83,8 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
     line_options
 end
 
-function prune_options(options::Set{Vector{Bool}}, current_state::Vector{Int})
-    filter(options) do option
+function prune_options!(options::Set{Vector{Bool}}, current_state::Vector{Int})
+    filter!(options) do option
         all(zip(option, current_state)) do (option, state)
             state == -1 || option == state
         end
@@ -105,37 +103,52 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
     solver_state = fill(-1, length(problem.row_blocks), length(problem.column_blocks))
     # 2. derive the initial options for each row and column
     verbose && @info "Generating initial row options"
-    row_options = map(
-        blocks -> get_possible_lines_from_blocks(blocks, length(problem.column_blocks)),
-        problem.row_blocks,
+    row_options = Dict(
+        map(
+            ((ii, blocks),) ->
+                ii => get_possible_lines_from_blocks(blocks, length(problem.column_blocks)),
+            enumerate(problem.row_blocks),
+        ),
     )
+
     verbose && @info "Generating initial column options"
-    column_options = map(
-        blocks -> get_possible_lines_from_blocks(blocks, length(problem.row_blocks)),
-        problem.column_blocks,
+    column_options = Dict(
+        map(
+            ((jj, blocks),) ->
+                jj => get_possible_lines_from_blocks(blocks, length(problem.row_blocks)),
+            enumerate(problem.column_blocks),
+        ),
     )
+
+    open_rows = Set(deepcopy(keys(row_options)))
+    open_columns = Set(deepcopy(keys(column_options)))
+
     # 3. iterate over rows and columns and push conclusions to internal state
     iteration = 0
-    while any(∉([0, 1]), solver_state)
-        # rows...
-        for (ii, row_options_ii) in enumerate(row_options)
-            pruned_row_options = prune_options(row_options_ii, solver_state[ii, :])
-            if isempty(pruned_row_options)
-                @info "Pruned options are empty. Problem not solvable"
-                return false
+    while !isempty(open_rows) || !isempty(open_columns)
+        if !isempty(open_rows)
+            ii = pop!(open_rows)
+            prune_options!(row_options[ii], solver_state[ii, :])
+            if isempty(row_options[ii])
+                @info "Row options are empty. Problem not solvable"
+                return nothing
             end
-            fills, crosses = intersect_line_options(pruned_row_options)
+            fills, crosses = intersect_line_options(row_options[ii])
+            updated = (fills .| crosses) .& (solver_state[ii, :] .< 0)
+            union!(open_columns, findall(updated))
             solver_state[ii, fills] .= 1
             solver_state[ii, crosses] .= 0
         end
-        # columns...
-        for (jj, column_options_jj) in enumerate(column_options)
-            pruned_column_options = prune_options(column_options_jj, solver_state[:, jj])
-            if isempty(pruned_column_options)
-                @info "Pruned options are empty. Problem not solvable"
-                return false
+        if !isempty(open_columns)
+            jj = pop!(open_columns)
+            prune_options!(column_options[jj], solver_state[:, jj])
+            if isempty(column_options[jj])
+                @info "Column options are empty. Problem not solvable"
+                return nothing
             end
-            fills, crosses = intersect_line_options(pruned_column_options)
+            fills, crosses = intersect_line_options(column_options[jj])
+            updated = (fills .| crosses) .& (solver_state[:, jj] .< 0)
+            union!(open_rows, findall(updated))
             solver_state[fills, jj] .= 1
             solver_state[crosses, jj] .= 0
         end
@@ -146,28 +159,21 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
         end
         if verbose
             @info "Iteration $(iteration)"
-            colorview(Gray, Matrix{Float64}(solver_state)) |> display
+            display(colorview(Gray, Matrix{Float64}(solver_state)))
         end
     end
+
+    if any(<(0), solver_state)
+        @info "Some fields are still undecided but there are no open rows or columns. Problem not sequentially solvable."
+        return nothing
+    end
+
     ProblemState(Matrix{Bool}(solver_state))
 end
 
-function show_gui(problem::Problem, problem_state::ProblemState)
-    @assert length(problem.row_blocks) == size(problem_state.grid, 1)
-    @assert length(problem.column_blocks) == size(problem_state.grid, 2)
-    figure, axis, heatmap = Makie.heatmap(
-        problem_state.grid'[:, end:-1:begin];
-        axis = (;
-            aspect = Makie.DataAspect(),
-            xticks = 0.5:1:(length(problem.row_blocks) + 0.5),
-            yticks = 0.5:1:(length(problem.column_blocks) + 0.5),
-            xgridwidth = 5,
-            ygridwidth = 5,
-            xgridcolor = :black,
-            ygridcolor = :black,
-        ),
-    )
-    Makie.translate!(heatmap, 0, 0, -100)
+function show_state(state::ProblemState)
+    colorview(Gray, state.grid)
+end
 
     figure
 end

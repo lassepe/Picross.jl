@@ -41,6 +41,6 @@ problem = Picross.Problem(;
     ],                                         
 )                                              
 final_problem_state = Picross.solve(problem)           
-display(Picross.show_gui(problem, final_problem_state))
+Picross.show_state(problem, final_problem_state)
 ```
 ![image](https://github.com/lassepe/Picross.jl/assets/10076790/eb674a00-efec-4544-b710-9f79d38a9691)

@@ -5,8 +5,6 @@ version = "0.1.0"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
-GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
-Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
