@@ -2,7 +2,7 @@ module Picross
 
 using Combinatorics: Combinatorics
 using ImageInTerminal: ImageInTerminal
-using Images: Gray, colorview, load, imresize
+using Images: Gray, colorview, load, imresize, imedge
 using SparseArrays: spzeros
 
 Base.@kwdef struct Problem
@@ -83,7 +83,7 @@ function get_possible_lines_from_blocks(blocks::Vector{Int}, line_length::Int)
     line_options
 end
 
-function prune_options!(options::Set{Vector{Bool}}, current_state::Vector{Int})
+function prune_options!(options::Set{Vector{Bool}}, current_state::AbstractVector{Int})
     filter!(options) do option
         all(zip(option, current_state)) do (option, state)
             state == -1 || option == state
@@ -102,60 +102,52 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
     # 1. generate the internal solver state
     solver_state = fill(-1, length(problem.row_blocks), length(problem.column_blocks))
     # 2. derive the initial options for each row and column
+    line_options = Dict{Tuple{Symbol,Int},Set{Vector{Bool}}}()
     verbose && @info "Generating initial row options"
-    row_options = Dict(
-        map(
-            ((ii, blocks),) ->
-                ii => get_possible_lines_from_blocks(blocks, length(problem.column_blocks)),
-            enumerate(problem.row_blocks),
-        ),
+    merge!(
+        line_options,
+        Dict([
+            (:row, ii) => get_possible_lines_from_blocks(blocks, length(problem.column_blocks)) for
+            (ii, blocks) in enumerate(problem.row_blocks)
+        ]),
     )
-
     verbose && @info "Generating initial column options"
-    column_options = Dict(
-        map(
-            ((jj, blocks),) ->
-                jj => get_possible_lines_from_blocks(blocks, length(problem.row_blocks)),
-            enumerate(problem.column_blocks),
-        ),
+    merge!(
+        line_options,
+        Dict([
+            (:column, jj) => get_possible_lines_from_blocks(blocks, length(problem.row_blocks)) for
+            (jj, blocks) in enumerate(problem.column_blocks)
+        ]),
     )
+    # 3. maintain a set of rows/columns that we still need to process
+    open_set = Set(keys(line_options))
 
-    open_rows = Set(keys(row_options))
-    open_columns = Set(keys(column_options))
-
-    # 3. iterate over rows and columns and push conclusions to internal state
+    # 4. iterate over open rows/columns
     iteration = 0
-    while !isempty(open_rows) || !isempty(open_columns)
-        if !isempty(open_rows)
-            ii = pop!(open_rows)
-            prune_options!(row_options[ii], solver_state[ii, :])
-            if isempty(row_options[ii])
-                @info "Row options are empty. Problem not solvable"
-                return nothing
-            end
-            fills, crosses = intersect_line_options(row_options[ii])
-            updated = (fills .| crosses) .& (solver_state[ii, :] .< 0)
-            union!(open_columns, findall(updated))
-            solver_state[ii, fills] .= 1
-            solver_state[ii, crosses] .= 0
+    while !isempty(open_set)
+        k = (line_type, ii) = pop!(open_set)
+        line_state = @views line_type === :row ? solver_state[ii, :] : solver_state[:, ii]
+        # 4.1. prune all options that are not compatible with the current state
+        prune_options!(line_options[k], line_state)
+        if isempty(line_options[k])
+            @info "Row options are empty. Problem not solvable"
+            return nothing
         end
-        if !isempty(open_columns)
-            jj = pop!(open_columns)
-            prune_options!(column_options[jj], solver_state[:, jj])
-            if isempty(column_options[jj])
-                @info "Column options are empty. Problem not solvable"
-                return nothing
-            end
-            fills, crosses = intersect_line_options(column_options[jj])
-            updated = (fills .| crosses) .& (solver_state[:, jj] .< 0)
-            union!(open_rows, findall(updated))
-            solver_state[fills, jj] .= 1
-            solver_state[crosses, jj] .= 0
-        end
+        # 4.2. draw new conclusions
+        fills, crosses = intersect_line_options(line_options[k])
+        updated = (fills .| crosses) .& (line_state .< 0)
+        line_state[fills] .= 1
+        line_state[crosses] .= 0
+
+        # 4.3 trigger updates for all affected rows/columns
+        new_indices = findall(updated)
+        new_line_type = line_type === :row ? :column : :row
+        union!(open_set, tuple.(new_line_type, new_indices))
+
         iteration += 1
         if iteration > maximum_number_of_iterations
             @info "Too many iterations. Giving up"
-            return false
+            return nothing
         end
         if verbose
             @info "Iteration $(iteration)"
