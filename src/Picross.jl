@@ -2,7 +2,7 @@ module Picross
 
 using Combinatorics: Combinatorics
 using ImageInTerminal: ImageInTerminal
-using Images: Gray, colorview, load, imresize, imedge
+using Images: Gray, RGB, colorview, load, imresize, imedge
 using SparseArrays: spzeros
 
 Base.@kwdef struct Problem
@@ -151,7 +151,7 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
         end
         if verbose
             @info "Iteration $(iteration)"
-            display(colorview(Gray, Matrix{Float64}(solver_state)))
+            display(show_state(solver_state))
         end
     end
 
@@ -164,10 +164,21 @@ function solve(problem::Problem; verbose = false, maximum_number_of_iterations =
 end
 
 function show_state(state::ProblemState)
-    colorview(Gray, state.grid)
+    show_state(state.grid)
 end
 
-    figure
+function show_state(grid::Matrix)
+    map(grid) do p
+        if p == 1
+            RGB(1, 1, 1)
+        elseif p == 0
+            RGB(1, 0, 0)
+        elseif p == -1
+            RGB(0, 0, 0)
+        else
+            error("Invalid value $p")
+        end
+    end
 end
 
 end # module Picross
