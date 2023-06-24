@@ -2,7 +2,7 @@
 
 A quick and dirty Julia implementation of a picross solver.
 
-## Insall
+## Install
 
 Install [julia](https://julialang.org/downloads/). Then from the REPL run:
 
